@@ -128,35 +128,11 @@ class SeccionMiCatalogo:
                 self.tree.insert("", "end", values=fila, tags=(tag,))
             self.tree.tag_configure("prestado", foreground="#c47a6a")
             conn.close()
-        except sqlite3.Error as e:
+        except sqlite3.Error:
             pass
-
-    def _cargar_libros_combo(self):
-        """Carga libros disponibles en el combo."""
-        self._libros_map = {}
-        try:
-            conn = sqlite3.connect(self.db_path)
-            cur  = conn.cursor()
-            cur.execute("""
-                SELECT isbn, titulo, autor FROM libros
-                WHERE estado = 'Disponible' ORDER BY titulo
-            """)
-            for isbn, titulo, autor in cur.fetchall():
-                label = f"{titulo}  —  {autor}  ({isbn})"
-                self._libros_map[label] = isbn
-            conn.close()
-        except Exception:
-            pass
-        self._libro_combo["values"] = list(self._libros_map.keys())
-
-    def _filtrar_libros(self):
-        txt = self._libro_var.get().lower()
-        filtrados = [k for k in self._libros_map if txt in k.lower()]
-        self._libro_combo["values"] = filtrados
 
     def mostrar(self):
         self.frame.pack(fill="both", expand=True)
-        self._cargar_libros_combo()
         self._cargar_tabla()
 
     def ocultar(self):
@@ -296,6 +272,31 @@ class SeccionMisPrestamos:
                 text=f"Tu ID de socio: {self._id_usuario}\n"
                      "Usa el ISBN del catálogo para solicitar un préstamo.")
 
+    # ── Métodos del combo de libros ───────────────────────────
+    def _cargar_libros_combo(self):
+        """Carga libros disponibles en el combo."""
+        self._libros_map = {}
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cur  = conn.cursor()
+            cur.execute("""
+                SELECT isbn, titulo, autor FROM libros
+                WHERE estado = 'Disponible' ORDER BY titulo
+            """)
+            for isbn, titulo, autor in cur.fetchall():
+                label = f"{titulo}  —  {autor}  ({isbn})"
+                self._libros_map[label] = isbn
+            conn.close()
+        except Exception:
+            pass
+        self._libro_combo["values"] = list(self._libros_map.keys())
+
+    def _filtrar_libros(self):
+        txt = self._libro_var.get().lower()
+        filtrados = [k for k in self._libros_map if txt in k.lower()]
+        self._libro_combo["values"] = filtrados
+
+    # ── Lógica de préstamo ────────────────────────────────────
     def _cargar_tabla(self):
         for r in self.tree.get_children():
             self.tree.delete(r)

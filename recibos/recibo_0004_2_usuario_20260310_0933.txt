@@ -1,0 +1,33 @@
+╔══════════════════════════════════════════════════════╗
+║                                                        ║
+║    EL ARCHIVO DE LOS MUNDOS                            ║
+║    ✦  COMPROBANTE DE PRÉSTAMO  ✦                       ║
+║                                                        ║
+╠══════════════════════════════════════════════════════╣
+║                                                        ║
+║    Nº Préstamo:    #0004                               ║
+║    Fecha emisión:  10/03/2026  09:33                   ║
+║                                                        ║
+╠  ▸  SOCIO  ══════════════════════════════════════════╣
+║                                                        ║
+║    ID:             2                                   ║
+║    Nombre:         usuario                             ║
+║    Correo:         luis.villegas@itgranada.com         ║
+║    Teléfono:       —                                   ║
+║                                                        ║
+╠  ▸  LIBRO PRESTADO  ═════════════════════════════════╣
+║                                                        ║
+║    ISBN:           9788408137329                       ║
+║    Título:         Detective Esqueleto: Primer ca      ║
+║    Autor:          Autor Desconocido                   ║
+║                                                        ║
+╠  ▸  DEVOLUCIÓN  ═════════════════════════════════════╣
+║                                                        ║
+║    Fecha límite:   25/03/2026                          ║
+║    Plazo:          15 días naturales                   ║
+║                                                        ║
+╠══════════════════════════════════════════════════════╣
+║                                                        ║
+║    Conserve este comprobante.                          ║
+║                                                        ║
+╚══════════════════════════════════════════════════════╝

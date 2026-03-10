@@ -9,9 +9,11 @@ Clases:
 """
 
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, ttk
 import os
 import shutil
+import sqlite3
+from datetime import datetime, timedelta
 
 from secciones.biblioteca_gestion_libros import (
     aplicar_tema,
@@ -60,7 +62,7 @@ class SeccionFacturas:
     """
     Panel de facturas/recibos:
     - Panel izquierdo: lista filtrable de archivos en /recibos/
-    - Panel derecho: visor del contenido formateado
+    - Panel derecho:   visor del contenido formateado
     - Botón descargar: copia el archivo a la ruta elegida por el usuario
     """
 
@@ -68,7 +70,7 @@ class SeccionFacturas:
         aplicar_tema()
         self.db_path      = db_path
         self.usuario      = usuario
-        self._ruta_activa = None   # ruta completa del recibo seleccionado
+        self._ruta_activa = None
 
         c = ConfigApp.colores()
         self._bg      = c["bg"]
@@ -97,11 +99,11 @@ class SeccionFacturas:
                  font=FONT_TITLE, bg=card, fg=gold).pack(side="left", padx=24, pady=10)
         tk.Frame(self.frame, height=1, bg=golddim).pack(fill="x")
 
-        # ── Cuerpo principal (panel izq + panel der) ──
+        # ── Cuerpo ──
         body = tk.Frame(self.frame, bg=bg)
         body.pack(fill="both", expand=True, padx=20, pady=18)
 
-        # ── Panel izquierdo: lista ──────────────────────────
+        # ── Panel izquierdo: lista ──
         left = tk.Frame(body, bg=card, width=280)
         left.pack(side="left", fill="y", padx=(0, 14))
         left.pack_propagate(False)
@@ -111,25 +113,23 @@ class SeccionFacturas:
         filtro_frame.pack(fill="x", padx=10, pady=(12, 6))
         self._var_filtro = tk.StringVar()
         self._var_filtro.trace_add("write", lambda *_: self._actualizar_lista())
-        entry_filtro = tk.Entry(
+        self._entry_filtro = tk.Entry(
             filtro_frame, textvariable=self._var_filtro,
             font=("Georgia", 12), bg=self._card2, fg=text,
             insertbackground=gold, relief="flat",
             highlightthickness=1, highlightbackground=golddim,
             highlightcolor=gold
         )
-        entry_filtro.pack(fill="x", ipady=5)
-        entry_filtro.insert(0, _t("filtrar"))
-        entry_filtro.config(fg=dim)
-        entry_filtro.bind("<FocusIn>",  lambda e: self._focus_filtro(entry_filtro, True))
-        entry_filtro.bind("<FocusOut>", lambda e: self._focus_filtro(entry_filtro, False))
+        self._entry_filtro.pack(fill="x", ipady=5)
+        self._entry_filtro.insert(0, _t("filtrar"))
+        self._entry_filtro.config(fg=dim)
+        self._entry_filtro.bind("<FocusIn>",  lambda e: self._focus_filtro(True))
+        self._entry_filtro.bind("<FocusOut>", lambda e: self._focus_filtro(False))
 
         # Contador
         self._lbl_count = tk.Label(left, text="", font=("Georgia", 10),
                                    bg=card, fg=dim)
         self._lbl_count.pack(anchor="w", padx=12)
-
-        # Separador
         tk.Frame(left, height=1, bg=golddim).pack(fill="x", padx=10, pady=4)
 
         # Lista con scroll
@@ -137,7 +137,7 @@ class SeccionFacturas:
         list_frame.pack(fill="both", expand=True, padx=6, pady=(0, 10))
 
         scroll = tk.Scrollbar(list_frame, orient="vertical", bg=card,
-                               troughcolor=self._card2, relief="flat", width=8)
+                              troughcolor=self._card2, relief="flat", width=8)
         self._listbox = tk.Listbox(
             list_frame, yscrollcommand=scroll.set,
             font=("Georgia", 12), bg=self._card2, fg=text,
@@ -150,18 +150,16 @@ class SeccionFacturas:
         scroll.pack(side="right", fill="y")
         self._listbox.bind("<<ListboxSelect>>", self._on_select)
 
-        # ── Panel derecho: visor ────────────────────────────
+        # ── Panel derecho: visor ──
         right = tk.Frame(body, bg=bg)
         right.pack(side="left", fill="both", expand=True)
 
-        # Toolbar derecho: nombre archivo + botón descargar
         toolbar = tk.Frame(right, bg=card, height=44)
         toolbar.pack(fill="x")
         toolbar.pack_propagate(False)
 
-        self._lbl_nombre = tk.Label(
-            toolbar, text="", font=("Georgia", 11, "italic"),
-            bg=card, fg=dim)
+        self._lbl_nombre = tk.Label(toolbar, text="", font=("Georgia", 11, "italic"),
+                                    bg=card, fg=dim)
         self._lbl_nombre.pack(side="left", padx=16, pady=10)
 
         self._btn_descargar = tk.Button(
@@ -185,9 +183,7 @@ class SeccionFacturas:
         visor_frame = tk.Frame(right, bg=bg)
         visor_frame.pack(fill="both", expand=True)
 
-        vscroll = tk.Scrollbar(visor_frame, orient="vertical",
-                               bg=self._card2, troughcolor=bg,
-                               relief="flat", width=8)
+        vscroll = ttk.Scrollbar(visor_frame, orient="vertical")
         vscroll.pack(side="right", fill="y")
 
         self._canvas = tk.Canvas(
@@ -198,59 +194,43 @@ class SeccionFacturas:
         self._canvas.pack(side="left", fill="both", expand=True)
         vscroll.config(command=self._canvas.yview)
 
-        # Frame interior que vive dentro del canvas
         self._visor_inner = tk.Frame(self._canvas, bg=bg)
         self._canvas_win  = self._canvas.create_window(
-            (0, 0), window=self._visor_inner, anchor="n")
+            (4, 4), window=self._visor_inner, anchor="nw")
 
-        def _on_configure(e):
-            self._canvas.configure(scrollregion=self._canvas.bbox("all"))
-            # Centrar horizontalmente
-            cw = self._canvas.winfo_width()
-            self._canvas.coords(self._canvas_win, cw // 2, 0)
-
-        def _on_canvas_resize(e):
-            cw = e.width
-            self._canvas.coords(self._canvas_win, cw // 2, 0)
-
-        self._visor_inner.bind("<Configure>", _on_configure)
-        self._canvas.bind("<Configure>", _on_canvas_resize)
+        self._visor_inner.bind("<Configure>", self._on_inner_configure)
         self._canvas.bind("<MouseWheel>",
-            lambda e: self._canvas.yview_scroll(-1*(e.delta//120), "units"))
-        self._visor_inner.bind("<MouseWheel>",
-            lambda e: self._canvas.yview_scroll(-1*(e.delta//120), "units"))
+            lambda e: self._canvas.yview_scroll(-1 * (e.delta // 120), "units"))
 
         # Mensaje de feedback
         self._lbl_msg = tk.Label(right, text="", font=("Georgia", 11, "italic"),
-                                  bg=bg, fg=self._ok)
+                                 bg=bg, fg=self._ok)
         self._lbl_msg.pack(anchor="e", padx=18, pady=(4, 0))
 
-        # Placeholder inicial
         self._mostrar_placeholder()
-
-        # Cargar lista
         self._actualizar_lista()
 
-    # ── Filtro entrada ───────────────────────────────────────
-    def _focus_filtro(self, entry, focused):
+    def _on_inner_configure(self, event=None):
+        self._canvas.configure(scrollregion=self._canvas.bbox("all"))
+
+    # ── Filtro ───────────────────────────────────────────────
+    def _focus_filtro(self, focused: bool):
         placeholder = _t("filtrar")
         if focused:
-            if entry.get() == placeholder:
-                entry.delete(0, "end")
-                entry.config(fg=self._text)
-            entry.config(highlightbackground=self._gold, highlightcolor=self._gold)
+            if self._entry_filtro.get() == placeholder:
+                self._entry_filtro.delete(0, "end")
+                self._entry_filtro.config(fg=self._text)
+            self._entry_filtro.config(highlightbackground=self._gold)
         else:
-            if not entry.get():
-                entry.insert(0, placeholder)
-                entry.config(fg=self._dim)
-            entry.config(highlightbackground=self._golddim)
+            if not self._entry_filtro.get():
+                self._entry_filtro.insert(0, placeholder)
+                self._entry_filtro.config(fg=self._dim)
+            self._entry_filtro.config(highlightbackground=self._golddim)
 
     # ── Lista de recibos ─────────────────────────────────────
     def _es_admin(self) -> bool:
-        """Comprueba en la BD si el usuario activo es administrador."""
         try:
-            import sqlite3 as _sq
-            conn = _sq.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path)
             cur  = conn.cursor()
             cur.execute("SELECT rol FROM usuarios WHERE nombre = ? LIMIT 1",
                         (str(self.usuario),))
@@ -261,10 +241,8 @@ class SeccionFacturas:
             return False
 
     def _id_usuario_activo(self) -> str | None:
-        """Obtiene el id_usuario del usuario activo desde la BD."""
         try:
-            import sqlite3 as _sq
-            conn = _sq.connect(self.db_path)
+            conn = sqlite3.connect(self.db_path)
             cur  = conn.cursor()
             cur.execute("SELECT id_usuario FROM usuarios WHERE nombre = ? LIMIT 1",
                         (str(self.usuario),))
@@ -278,8 +256,6 @@ class SeccionFacturas:
         if not os.path.isdir(RECIBOS_DIR):
             return []
         archivos = [f for f in os.listdir(RECIBOS_DIR) if f.endswith(".txt")]
-        # Socios solo ven sus propios recibos
-        # Nombre: recibo_{id_prestamo}_{id_usuario}_{nombre}_{fecha}.txt
         if not self._es_admin():
             uid = self._id_usuario_activo()
             if uid:
@@ -306,16 +282,14 @@ class SeccionFacturas:
         self._listbox.delete(0, "end")
 
         for f in archivos:
-            # recibo_{id_prestamo}_{id_usuario}_{nombre}_{fecha}.txt
-            base = os.path.splitext(f)[0]
-            partes = base.split("_", 4)  # [recibo, idp, idu, nombre, fecha_hora]
+            base   = os.path.splitext(f)[0]
+            partes = base.split("_", 4)
             if len(partes) >= 5:
-                idp   = partes[1].lstrip("0") or "0"
-                nombre = partes[3].replace("_", " ")
-                fecha  = partes[4][:8]  # YYYYMMDD
+                idp    = partes[1].lstrip("0") or "0"
+                nombre = partes[3].replace("_", " ").title()
+                fecha  = partes[4][:8]
                 try:
-                    from datetime import datetime as _dt
-                    fecha_fmt = _dt.strptime(fecha, "%Y%m%d").strftime("%d/%m/%Y")
+                    fecha_fmt = datetime.strptime(fecha, "%Y%m%d").strftime("%d/%m/%Y")
                 except Exception:
                     fecha_fmt = fecha
                 label = f"  #{idp}  {nombre}  —  {fecha_fmt}"
@@ -344,23 +318,149 @@ class SeccionFacturas:
         self._ruta_activa = ruta
         self._lbl_nombre.config(text=nombre, fg=self._text)
         self._btn_descargar.config(state="normal")
-        self._cargar_recibo(ruta)
+        self._cargar_recibo(nombre, ruta)
         self._lbl_msg.config(text="")
 
-    # ── Visor de contenido ───────────────────────────────────
-    def _limpiar_canvas(self):
+    # ── Carga de datos del recibo ─────────────────────────────
+    def _datos_desde_bd(self, nombre_archivo: str) -> dict | None:
+        """
+        Extrae id_prestamo del nombre del archivo y consulta la BD.
+        Nombre esperado: recibo_{id_prestamo:04d}_{id_usuario}_{nombre}_{fecha}.txt
+        """
+        try:
+            base   = os.path.splitext(nombre_archivo)[0]
+            partes = base.split("_", 4)
+            if len(partes) < 3 or partes[0] != "recibo":
+                return None
+            id_prestamo = int(partes[1])
+
+            conn = sqlite3.connect(self.db_path)
+            cur  = conn.cursor()
+            cur.execute("""
+                SELECT p.id_prestamo,
+                       p.fecha_prestamo,
+                       u.id_usuario,
+                       u.nombre,
+                       COALESCE(u.correo,   '—'),
+                       COALESCE(u.telefono, '—'),
+                       l.isbn,
+                       l.titulo,
+                       l.autor,
+                       p.fecha_devolucion_estimada
+                FROM prestamos p
+                JOIN usuarios u ON p.id_usuario = u.id_usuario
+                JOIN libros   l ON p.isbn        = l.isbn
+                WHERE p.id_prestamo = ?
+            """, (id_prestamo,))
+            row = cur.fetchone()
+            conn.close()
+
+            if not row:
+                return None
+
+            # Formatear fechas
+            def fmt_fecha(s):
+                try:
+                    return datetime.strptime(s, "%Y-%m-%d").strftime("%d/%m/%Y")
+                except Exception:
+                    return s or "—"
+
+            # Calcular hora de emisión desde el nombre del archivo
+            hora_emision = ""
+            if len(partes) >= 5:
+                ts = partes[4]            # "20260310_0933"
+                try:
+                    hora_emision = datetime.strptime(ts, "%Y%m%d_%H%M").strftime(
+                        "%d/%m/%Y  %H:%M")
+                except Exception:
+                    pass
+            if not hora_emision:
+                hora_emision = fmt_fecha(row[1])
+
+            return {
+                "id_prestamo":  str(row[0]),
+                "fecha":        hora_emision,
+                "socio": {
+                    "id":       str(row[2]),
+                    "nombre":   row[3],
+                    "correo":   row[4],
+                    "telefono": row[5],
+                },
+                "libro": {
+                    "isbn":   row[6],
+                    "titulo": row[7],
+                    "autor":  row[8],
+                },
+                "devolucion": {
+                    "fecha": fmt_fecha(row[9]),
+                    "plazo": "15 días naturales",
+                },
+            }
+        except Exception:
+            return None
+
+    def _parse_recibo_txt(self, ruta: str) -> dict:
+        """
+        Parsea el fichero .txt como fallback si la BD no devuelve datos.
+        Limpia correctamente los caracteres de borde (║) al final de los valores.
+        """
+        data = {
+            "id_prestamo": "",
+            "fecha":       "",
+            "socio":      {"id": "", "nombre": "", "correo": "", "telefono": ""},
+            "libro":      {"isbn": "", "titulo": "", "autor": ""},
+            "devolucion": {"fecha": "", "plazo": "15 días naturales"},
+        }
+        try:
+            with open(ruta, "r", encoding="utf-8") as f:
+                texto = f.read()
+        except Exception:
+            return data
+
+        def get(clave: str) -> str:
+            for line in texto.splitlines():
+                # Eliminar bordes izquierdo y derecho
+                s = line.strip()
+                s = s.lstrip("║╠╔╚").rstrip("║╣╗╝").strip()
+                if ":" not in s:
+                    continue
+                k, _, v = s.partition(":")
+                if k.strip().lower() == clave.strip().lower():
+                    return v.strip().rstrip("║").strip()
+            return ""
+
+        data["id_prestamo"]          = get("Nº Préstamo").lstrip("#").strip()
+        data["fecha"]                = get("Fecha emisión") or get("Fecha")
+        data["socio"]["id"]          = get("ID")
+        data["socio"]["nombre"]      = get("Nombre")
+        data["socio"]["correo"]      = get("Correo")
+        data["socio"]["telefono"]    = get("Teléfono")
+        data["libro"]["isbn"]        = get("ISBN")
+        data["libro"]["titulo"]      = get("Título")
+        data["libro"]["autor"]       = get("Autor")
+        data["devolucion"]["fecha"]  = get("Fecha límite")
+        data["devolucion"]["plazo"]  = get("Plazo") or "15 días naturales"
+        return data
+
+    def _cargar_recibo(self, nombre: str, ruta: str):
+        self._limpiar_visor()
+        # Intentar obtener datos fiables desde la BD
+        data = self._datos_desde_bd(nombre)
+        if not data:
+            data = self._parse_recibo_txt(ruta)
+        self._renderizar_recibo(data)
+        self._canvas.update_idletasks()
+        self._canvas.yview_moveto(0)
+
+    # ── Visor ────────────────────────────────────────────────
+    def _limpiar_visor(self):
         for w in self._visor_inner.winfo_children():
             w.destroy()
 
-    def _bind_scroll(self, widget):
-        widget.bind("<MouseWheel>",
-            lambda e: self._canvas.yview_scroll(-1*(e.delta//120), "units"))
-        for child in widget.winfo_children():
-            self._bind_scroll(child)
-
     def _mostrar_placeholder(self):
-        self._limpiar_canvas()
-        msg = _t("sin_recibos") if not self._listar_archivos() else _t("sel_recibo")
+        self._limpiar_visor()
+        archivos = self._listar_archivos()
+        msg = _t("sin_recibos") if not archivos else _t("sel_recibo")
         outer = tk.Frame(self._visor_inner, bg=self._bg)
         outer.pack(pady=80, padx=40)
         tk.Label(outer, text="🧾", font=("Georgia", 48),
@@ -371,48 +471,8 @@ class SeccionFacturas:
         self._lbl_nombre.config(text="", fg=self._dim)
         self._canvas.yview_moveto(0)
 
-    def _parse_recibo(self, ruta: str) -> dict:
-        data = {
-            "id_prestamo": "", "fecha": "",
-            "socio":      {"id": "", "nombre": "", "correo": "", "telefono": ""},
-            "libro":      {"isbn": "", "titulo": "", "autor": ""},
-            "devolucion": {"fecha": "", "plazo": ""},
-        }
-        try:
-            with open(ruta, "r", encoding="utf-8") as f:
-                texto = f.read()
-        except Exception:
-            return data
-
-        def get(clave):
-            for line in texto.splitlines():
-                s = line.strip().lstrip("║").strip()
-                if ":" in s:
-                    k, _, v = s.partition(":")
-                    if k.strip().lower() == clave.strip().lower():
-                        return v.strip()
-            return ""
-
-        data["id_prestamo"] = (get("Nº Préstamo") or get("Nº Préstamo")).lstrip("#").strip()
-        data["fecha"]       = get("Fecha emisión") or get("Fecha")
-        data["socio"]["id"]       = get("ID")
-        data["socio"]["nombre"]   = get("Nombre")
-        data["socio"]["correo"]   = get("Correo")
-        data["socio"]["telefono"] = get("Teléfono")
-        data["libro"]["isbn"]     = get("ISBN")
-        data["libro"]["titulo"]   = get("Título")
-        data["libro"]["autor"]    = get("Autor")
-        data["devolucion"]["fecha"] = get("Fecha límite")
-        data["devolucion"]["plazo"] = get("Plazo") or "15 días naturales"
-        return data
-
-    def _cargar_recibo(self, ruta: str):
-        self._limpiar_canvas()
-        data = self._parse_recibo(ruta)
-        self._renderizar_recibo(data)
-        self._canvas.yview_moveto(0)
-
     def _renderizar_recibo(self, data: dict):
+        """Construye el recibo visualmente dentro del visor."""
         bg      = self._bg
         card    = self._card
         card2   = self._card2
@@ -421,131 +481,151 @@ class SeccionFacturas:
         text    = self._text
         dim     = self._dim
         err     = self._err
-        CARD_W  = 640
+        CARD_W  = 600
 
+        # Marco exterior con margen
         outer = tk.Frame(self._visor_inner, bg=bg)
-        outer.pack(pady=28, padx=20, anchor="n")
+        outer.pack(fill="x", padx=24, pady=20)
 
-        def sep(parent, color=golddim, h=1, pady_val=0):
-            tk.Frame(parent, bg=color, height=h, width=CARD_W).pack(pady=pady_val)
+        def sep(parent, color=golddim, h=1):
+            tk.Frame(parent, bg=color, height=h).pack(fill="x")
 
         def kv_row(parent, icon, label, value, vc=None):
-            row = tk.Frame(parent, bg=card, width=CARD_W)
-            row.pack(fill="x", padx=24, pady=4)
-            row.pack_propagate(False)
-            tk.Label(row, text=icon, font=("Segoe UI Emoji", 14),
-                     bg=card, fg=golddim, width=2).pack(side="left")
-            tk.Label(row, text=label, font=("Georgia", 13),
-                     bg=card, fg=dim, anchor="w", width=15).pack(side="left", padx=(6, 0))
-            tk.Label(row, text=value or "—", font=("Georgia", 13, "bold"),
-                     bg=card, fg=vc or text, anchor="w").pack(side="left", padx=(8, 0))
-            self._bind_scroll(row)
+            row = tk.Frame(parent, bg=card)
+            row.pack(fill="x", padx=20, pady=3)
+            tk.Label(row, text=icon, font=("Georgia", 13),
+                     bg=card, fg=golddim, width=2, anchor="w").pack(side="left")
+            tk.Label(row, text=label, font=("Georgia", 11),
+                     bg=card, fg=dim, anchor="w", width=16).pack(side="left", padx=(4, 0))
+            tk.Label(row, text=value or "—", font=("Georgia", 11, "bold"),
+                     bg=card, fg=vc or text, anchor="w",
+                     wraplength=CARD_W - 220).pack(side="left", padx=(8, 0))
 
-        def sec_head(parent, icon, titulo, accent=gold):
-            f = tk.Frame(parent, bg=card2, width=CARD_W)
+        def sec_head(parent, icon, titulo, accent=None):
+            accent = accent or gold
+            f = tk.Frame(parent, bg=card2)
             f.pack(fill="x")
-            # left accent bar
-            tk.Frame(f, bg=accent, width=5).pack(side="left", fill="y")
+            tk.Frame(f, bg=accent, width=4).pack(side="left", fill="y")
             inner = tk.Frame(f, bg=card2)
-            inner.pack(side="left", padx=16, pady=11)
-            tk.Label(inner, text=icon, font=("Segoe UI Emoji", 14),
+            inner.pack(side="left", padx=14, pady=10)
+            tk.Label(inner, text=icon, font=("Georgia", 13),
                      bg=card2, fg=accent).pack(side="left", padx=(0, 8))
-            tk.Label(inner, text=titulo, font=("Georgia", 13, "bold"),
+            tk.Label(inner, text=titulo, font=("Georgia", 11, "bold"),
                      bg=card2, fg=accent).pack(side="left")
-            self._bind_scroll(f)
 
-        def space(parent, h=10):
-            tk.Frame(parent, bg=card, height=h, width=CARD_W).pack()
+        def spacer(parent, h=8):
+            tk.Frame(parent, bg=card, height=h).pack(fill="x")
 
-        # ── CABECERA ──────────────────────────────────────────
-        cab = tk.Frame(outer, bg=card, width=CARD_W)
-        cab.pack()
-        cab.pack_propagate(False)
-        tk.Frame(cab, bg=gold, height=4, width=CARD_W).pack(fill="x")  # borde superior
-        tk.Label(cab, text="✦  EL ARCHIVO DE LOS MUNDOS  ✦",
-                 font=("Georgia", 18, "bold"),
-                 bg=card, fg=gold).pack(pady=(22, 4))
-        tk.Label(cab, text="C O M P R O B A N T E   D E   P R É S T A M O",
-                 font=("Georgia", 11),
+        # ═══════════════════════════════════════
+        # CABECERA PRINCIPAL
+        # ═══════════════════════════════════════
+        cab = tk.Frame(outer, bg=card)
+        cab.pack(fill="x")
+
+        # Borde superior dorado
+        tk.Frame(cab, bg=gold, height=4).pack(fill="x")
+
+        # Título de la biblioteca
+        tk.Label(cab,
+                 text="✦  EL ARCHIVO DE LOS MUNDOS  ✦",
+                 font=("Georgia", 17, "bold"),
+                 bg=card, fg=gold).pack(pady=(18, 2))
+        tk.Label(cab,
+                 text="C O M P R O B A N T E   D E   P R É S T A M O",
+                 font=("Georgia", 10),
                  bg=card, fg=dim).pack()
-        sep(cab, golddim, pady_val=16)
 
-        # Número grande + fecha
-        mid = tk.Frame(cab, bg=card)
-        mid.pack(pady=(0, 22))
-        num_f = tk.Frame(mid, bg=card)
-        num_f.pack(side="left", padx=36)
-        tk.Label(num_f, text="PRÉSTAMO", font=("Georgia", 11),
-                 bg=card, fg=dim).pack()
-        tk.Label(num_f, text=f"# {data['id_prestamo'] or '—'}",
-                 font=("Georgia", 34, "bold"),
-                 bg=card, fg=gold).pack()
-        tk.Frame(mid, bg=golddim, width=1, height=70).pack(side="left", fill="y", padx=24)
-        dt_f = tk.Frame(mid, bg=card)
-        dt_f.pack(side="left", padx=24)
-        tk.Label(dt_f, text="FECHA DE EMISIÓN", font=("Georgia", 11),
+        sep(cab, golddim)
+
+        # Número de préstamo + fecha
+        info_row = tk.Frame(cab, bg=card)
+        info_row.pack(fill="x", padx=20, pady=14)
+
+        # Bloque izquierdo: número
+        num_blk = tk.Frame(info_row, bg=card)
+        num_blk.pack(side="left", padx=(10, 0))
+        tk.Label(num_blk, text="PRÉSTAMO", font=("Georgia", 9),
                  bg=card, fg=dim).pack(anchor="w")
-        tk.Label(dt_f, text=data["fecha"] or "—",
-                 font=("Georgia", 16, "bold"),
-                 bg=card, fg=text).pack(anchor="w", pady=(6, 0))
-        self._bind_scroll(cab)
+        tk.Label(num_blk,
+                 text=f"# {data['id_prestamo'] or '—'}",
+                 font=("Georgia", 28, "bold"),
+                 bg=card, fg=gold).pack(anchor="w")
 
-        # ── SOCIO ─────────────────────────────────────────────
+        # Separador vertical
+        tk.Frame(info_row, bg=golddim, width=1).pack(
+            side="left", fill="y", padx=30)
+
+        # Bloque derecho: fecha
+        fecha_blk = tk.Frame(info_row, bg=card)
+        fecha_blk.pack(side="left")
+        tk.Label(fecha_blk, text="FECHA DE EMISIÓN", font=("Georgia", 9),
+                 bg=card, fg=dim).pack(anchor="w")
+        tk.Label(fecha_blk,
+                 text=data["fecha"] or "—",
+                 font=("Georgia", 15, "bold"),
+                 bg=card, fg=text).pack(anchor="w", pady=(4, 0))
+
+        sep(cab, golddim)
+        spacer(cab, 4)
+
+        # ═══════════════════════════════════════
+        # SECCIÓN: DATOS DEL SOCIO
+        # ═══════════════════════════════════════
         sep(outer, golddim)
         sec_head(outer, "👤", "DATOS DEL SOCIO")
-        s_card = tk.Frame(outer, bg=card, width=CARD_W)
-        s_card.pack()
-        space(s_card, 6)
-        kv_row(s_card, "🆔", "ID socio",  data["socio"]["id"])
-        kv_row(s_card, "✏", "Nombre",    data["socio"]["nombre"], gold)
-        kv_row(s_card, "✉", "Correo",    data["socio"]["correo"])
-        kv_row(s_card, "📱", "Teléfono", data["socio"]["telefono"])
-        space(s_card, 12)
-        self._bind_scroll(s_card)
+        s_card = tk.Frame(outer, bg=card)
+        s_card.pack(fill="x")
+        spacer(s_card)
+        kv_row(s_card, "🆔", "ID socio",   data["socio"]["id"])
+        kv_row(s_card, "✏", "Nombre",      data["socio"]["nombre"], gold)
+        kv_row(s_card, "✉", "Correo",      data["socio"]["correo"])
+        kv_row(s_card, "📱", "Teléfono",   data["socio"]["telefono"])
+        spacer(s_card, 12)
 
-        # ── LIBRO ─────────────────────────────────────────────
+        # ═══════════════════════════════════════
+        # SECCIÓN: LIBRO PRESTADO
+        # ═══════════════════════════════════════
         sep(outer, golddim)
         sec_head(outer, "📖", "LIBRO PRESTADO")
-        l_card = tk.Frame(outer, bg=card, width=CARD_W)
-        l_card.pack()
-        space(l_card, 6)
+        l_card = tk.Frame(outer, bg=card)
+        l_card.pack(fill="x")
+        spacer(l_card)
         kv_row(l_card, "🔢", "ISBN",   data["libro"]["isbn"])
         kv_row(l_card, "📚", "Título", data["libro"]["titulo"])
-        kv_row(l_card, "✍", "Autor",  data["libro"]["autor"])
-        space(l_card, 12)
-        self._bind_scroll(l_card)
+        kv_row(l_card, "✍", "Autor",   data["libro"]["autor"])
+        spacer(l_card, 12)
 
-        # ── DEVOLUCIÓN ────────────────────────────────────────
+        # ═══════════════════════════════════════
+        # SECCIÓN: DEVOLUCIÓN
+        # ═══════════════════════════════════════
         sep(outer, golddim)
         sec_head(outer, "🗓", "DEVOLUCIÓN", accent=err)
-        d_card = tk.Frame(outer, bg=card, width=CARD_W)
-        d_card.pack()
-        space(d_card, 6)
+        d_card = tk.Frame(outer, bg=card)
+        d_card.pack(fill="x")
+        spacer(d_card)
         kv_row(d_card, "⚠", "Fecha límite", data["devolucion"]["fecha"], err)
         kv_row(d_card, "⏱", "Plazo",        data["devolucion"]["plazo"])
-        space(d_card, 12)
-        self._bind_scroll(d_card)
+        spacer(d_card, 12)
 
-        # ── PIE ───────────────────────────────────────────────
+        # ═══════════════════════════════════════
+        # PIE
+        # ═══════════════════════════════════════
         sep(outer, gold)
-        pie = tk.Frame(outer, bg=card, width=CARD_W)
-        pie.pack()
+        pie = tk.Frame(outer, bg=card)
+        pie.pack(fill="x")
         tk.Label(pie,
                  text="Conserve este comprobante como justificante del préstamo.",
-                 font=("Georgia", 12, "italic"),
-                 bg=card, fg=dim, wraplength=CARD_W - 48, justify="center").pack(pady=14)
-        tk.Label(pie, text="✦", font=("Georgia", 14),
-                 bg=card, fg=golddim).pack(pady=(0, 16))
-        tk.Frame(pie, bg=gold, height=4, width=CARD_W).pack(fill="x")  # borde inferior
-        self._bind_scroll(pie)
-        self._bind_scroll(outer)
+                 font=("Georgia", 10, "italic"),
+                 bg=card, fg=dim,
+                 wraplength=CARD_W - 60, justify="center").pack(pady=12)
+        tk.Label(pie, text="✦", font=("Georgia", 12),
+                 bg=card, fg=golddim).pack(pady=(0, 10))
+        tk.Frame(pie, bg=gold, height=4).pack(fill="x")
 
-
-        # ── Descarga ─────────────────────────────────────────────
+    # ── Descarga ─────────────────────────────────────────────
     def _descargar(self):
         if not self._ruta_activa or not os.path.isfile(self._ruta_activa):
             return
-
         nombre_sugerido = os.path.basename(self._ruta_activa)
         destino = filedialog.asksaveasfilename(
             title=_t("descargar"),
@@ -554,8 +634,7 @@ class SeccionFacturas:
             filetypes=[("Archivo de texto", "*.txt"), ("Todos los archivos", "*.*")]
         )
         if not destino:
-            return  # usuario canceló
-
+            return
         try:
             shutil.copy2(self._ruta_activa, destino)
             self._lbl_msg.config(text=f"✓  {_t('guardado_ok')}", fg=self._ok)
