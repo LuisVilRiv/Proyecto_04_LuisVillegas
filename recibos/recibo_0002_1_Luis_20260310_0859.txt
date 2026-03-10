@@ -1,0 +1,33 @@
+╔══════════════════════════════════════════════════════╗
+║                                                        ║
+║    EL ARCHIVO DE LOS MUNDOS                            ║
+║    ✦  COMPROBANTE DE PRÉSTAMO  ✦                       ║
+║                                                        ║
+╠══════════════════════════════════════════════════════╣
+║                                                        ║
+║    Nº Préstamo:    #0002                               ║
+║    Fecha emisión:  10/03/2026  08:59                   ║
+║                                                        ║
+╠  ▸  SOCIO  ══════════════════════════════════════════╣
+║                                                        ║
+║    ID:             1                                   ║
+║    Nombre:         Luis                                ║
+║    Correo:         villegasriveraluis@gmail.com        ║
+║    Teléfono:       —                                   ║
+║                                                        ║
+╠  ▸  LIBRO PRESTADO  ═════════════════════════════════╣
+║                                                        ║
+║    ISBN:           9788497590031                       ║
+║    Título:         Harry Potter y el prisionero d      ║
+║    Autor:          J.K. Rowling                        ║
+║                                                        ║
+╠  ▸  DEVOLUCIÓN  ═════════════════════════════════════╣
+║                                                        ║
+║    Fecha límite:   25/03/2026                          ║
+║    Plazo:          15 días naturales                   ║
+║                                                        ║
+╠══════════════════════════════════════════════════════╣
+║                                                        ║
+║    Conserve este comprobante.                          ║
+║                                                        ║
+╚══════════════════════════════════════════════════════╝

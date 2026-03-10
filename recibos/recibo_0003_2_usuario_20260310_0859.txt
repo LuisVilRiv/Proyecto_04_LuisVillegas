@@ -1,0 +1,33 @@
+╔══════════════════════════════════════════════════════╗
+║                                                        ║
+║    EL ARCHIVO DE LOS MUNDOS                            ║
+║    ✦  COMPROBANTE DE PRÉSTAMO  ✦                       ║
+║                                                        ║
+╠══════════════════════════════════════════════════════╣
+║                                                        ║
+║    Nº Préstamo:    #0003                               ║
+║    Fecha emisión:  10/03/2026  08:59                   ║
+║                                                        ║
+╠  ▸  SOCIO  ══════════════════════════════════════════╣
+║                                                        ║
+║    ID:             2                                   ║
+║    Nombre:         usuario                             ║
+║    Correo:         luis.villegas@itgranada.com         ║
+║    Teléfono:       —                                   ║
+║                                                        ║
+╠  ▸  LIBRO PRESTADO  ═════════════════════════════════╣
+║                                                        ║
+║    ISBN:           9788497590000                       ║
+║    Título:         El Príncipe de la Niebla            ║
+║    Autor:          Carlos Ruiz Zafón                   ║
+║                                                        ║
+╠  ▸  DEVOLUCIÓN  ═════════════════════════════════════╣
+║                                                        ║
+║    Fecha límite:   25/03/2026                          ║
+║    Plazo:          15 días naturales                   ║
+║                                                        ║
+╠══════════════════════════════════════════════════════╣
+║                                                        ║
+║    Conserve este comprobante.                          ║
+║                                                        ║
+╚══════════════════════════════════════════════════════╝
