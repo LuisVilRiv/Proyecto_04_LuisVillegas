@@ -201,6 +201,31 @@ class SeccionCalendario:
                         "id": row[3], "texto": texto,
                     })
 
+            # 2b. Préstamos vencidos de meses anteriores aún sin devolver
+            #     → se anclan al día de hoy si hoy pertenece al mes visible,
+            #       o al primer día del mes visible si es un mes futuro.
+            if self._hoy.month == self._mes and self._hoy.year == self._año:
+                ancla = self._hoy
+            else:
+                ancla = primer_dia   # mes futuro: primer día del mes
+
+            cur.execute(f"""
+                SELECT p.fecha_devolucion_estimada, u.nombre, l.titulo,
+                       p.id_prestamo
+                FROM prestamos p
+                JOIN usuarios u ON p.id_usuario = u.id_usuario
+                JOIN libros   l ON p.isbn = l.isbn
+                WHERE p.devuelto = 0
+                  AND p.fecha_devolucion_estimada < ?{filtro_u}
+            """, (primer_dia.strftime("%Y-%m-%d"),))
+            for row in cur.fetchall():
+                dias_ret = calcular_dias_retraso(row[0])
+                texto = f"Vencido +{dias_ret}d: {row[2]}"
+                self._añadir_evento(ancla.isoformat(), {
+                    "tipo": "vencido", "socio": row[1], "libro": row[2],
+                    "id": row[3], "texto": texto,
+                })
+
             # 3. Devoluciones usando fecha real de devolución
             cur.execute(f"""
                 SELECT p.fecha_devolucion_real, u.nombre, l.titulo,

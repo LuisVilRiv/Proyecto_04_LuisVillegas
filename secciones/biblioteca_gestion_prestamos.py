@@ -39,76 +39,175 @@ def _nombre_limpio(nombre: str) -> str:
 
 
 def generar_recibo(usuario: Usuario, libro: Libro, id_prestamo: int) -> str:
+    """
+    Genera un recibo de préstamo en PDF con diseño oscuro elegante.
+    Devuelve la ruta absoluta al archivo .pdf generado.
+    """
     try:
-        os.makedirs(RECIBOS_DIR, exist_ok=True)
-        fecha_hoy        = datetime.now()
-        fecha_devolucion = fecha_hoy + timedelta(days=15)
-        slug  = _nombre_limpio(usuario.nombre)
-        fecha_slug = fecha_hoy.strftime("%Y%m%d_%H%M")
-        nombre_archivo = f"recibo_{id_prestamo:04d}_{usuario.id_usuario}_{slug}_{fecha_slug}.txt"
-        ruta  = os.path.join(RECIBOS_DIR, nombre_archivo)
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib.units     import cm
+        from reportlab.lib           import colors
+        from reportlab.platypus      import (
+            SimpleDocTemplate, Paragraph, Spacer,
+            Table, TableStyle, HRFlowable,
+        )
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums  import TA_CENTER, TA_LEFT
+    except ImportError:
+        raise IOError(
+            "reportlab no está instalado. Ejecuta: pip install reportlab")
 
-        W = 56
-        borde_d = "╔" + "═" * (W-2) + "╗"
-        borde_f = "╚" + "═" * (W-2) + "╝"
-        borde_m = "╠" + "═" * (W-2) + "╣"
-        sep     = "║" + " " * (W-2) + "║"
+    os.makedirs(RECIBOS_DIR, exist_ok=True)
+    ahora      = datetime.now()
+    fecha_dev  = (ahora + timedelta(days=15)).strftime("%d/%m/%Y")
+    fecha_emis = ahora.strftime("%d/%m/%Y  %H:%M")
+    slug       = _nombre_limpio(usuario.nombre)
+    ts         = ahora.strftime("%Y%m%d_%H%M")
+    nombre_pdf = f"recibo_{id_prestamo:04d}_{usuario.id_usuario}_{slug}_{ts}.pdf"
+    ruta_pdf   = os.path.join(RECIBOS_DIR, nombre_pdf)
 
-        def fila(txt, ancho=W):
-            pad = ancho - 4 - len(txt)
-            return f"║  {txt}{chr(32)*max(pad,0)}  ║"
+    # ── Paleta ────────────────────────────────────────────────
+    GOLD  = colors.HexColor("#c8a96e")
+    DARK  = colors.HexColor("#1a1a2e")
+    CARD  = colors.HexColor("#16213e")
+    CARD2 = colors.HexColor("#1c2a4a")
+    DIM   = colors.HexColor("#7a7a8c")
+    TEXT  = colors.HexColor("#e0e0e0")
+    ERR   = colors.HexColor("#c45a3a")
+    LINE  = colors.HexColor("#2a3a5e")
 
-        def kv(clave, valor, ancho=W):
-            linea = f"{clave:<18}{valor}"
-            pad = ancho - 4 - len(linea)
-            return f"║  {linea}{chr(32)*max(pad,0)}  ║"
+    # ── Estilos ───────────────────────────────────────────────
+    base = getSampleStyleSheet()
+    def ps(name, **kw):
+        return ParagraphStyle(name, parent=base["Normal"], **kw)
 
-        def titulo_sec(txt, ancho=W):
-            inner = f"  ▸  {txt}  "
-            pad = ancho - 2 - len(inner)
-            return f"╠{inner}{"═"*max(pad,0)}╣"
+    S = {
+        "titulo":   ps("t",  fontName="Times-Bold",     fontSize=18,
+                        textColor=GOLD, alignment=TA_CENTER, spaceAfter=2),
+        "sub":      ps("s",  fontName="Times-Italic",   fontSize=9,
+                        textColor=DIM,  alignment=TA_CENTER, spaceAfter=2),
+        "sec":      ps("sh", fontName="Helvetica-Bold", fontSize=10,
+                        textColor=GOLD, alignment=TA_LEFT,
+                        spaceBefore=6, spaceAfter=3),
+        "lbl":      ps("lb", fontName="Helvetica",      fontSize=9,
+                        textColor=DIM,  alignment=TA_LEFT),
+        "val":      ps("vl", fontName="Helvetica-Bold", fontSize=10,
+                        textColor=TEXT, alignment=TA_LEFT),
+        "val_gold": ps("vg", fontName="Helvetica-Bold", fontSize=10,
+                        textColor=GOLD, alignment=TA_LEFT),
+        "val_err":  ps("ve", fontName="Helvetica-Bold", fontSize=10,
+                        textColor=ERR,  alignment=TA_LEFT),
+        "num":      ps("nm", fontName="Times-Bold",     fontSize=28,
+                        textColor=GOLD, alignment=TA_LEFT),
+        "fecha":    ps("fv", fontName="Helvetica-Bold", fontSize=13,
+                        textColor=TEXT, alignment=TA_LEFT),
+        "pie":      ps("pi", fontName="Times-Italic",   fontSize=9,
+                        textColor=DIM,  alignment=TA_CENTER, spaceBefore=6),
+    }
 
-        contenido = "\n".join([
-            borde_d,
-            fila(""),
-            fila("  EL ARCHIVO DE LOS MUNDOS"),
-            fila("  ✦  COMPROBANTE DE PRÉSTAMO  ✦"),
-            fila(""),
-            borde_m,
-            fila(""),
-            kv("  Nº Préstamo:", f"#{id_prestamo:04d}"),
-            kv("  Fecha emisión:", fecha_hoy.strftime("%d/%m/%Y  %H:%M")),
-            fila(""),
-            titulo_sec("SOCIO"),
-            fila(""),
-            kv("  ID:", str(usuario.id_usuario)),
-            kv("  Nombre:", usuario.nombre),
-            kv("  Correo:", usuario.correo or "—"),
-            kv("  Teléfono:", usuario.telefono or "—"),
-            fila(""),
-            titulo_sec("LIBRO PRESTADO"),
-            fila(""),
-            kv("  ISBN:", libro.isbn),
-            kv("  Título:", libro.titulo[:30]),
-            kv("  Autor:", libro.autor[:30]),
-            fila(""),
-            titulo_sec("DEVOLUCIÓN"),
-            fila(""),
-            kv("  Fecha límite:", fecha_devolucion.strftime("%d/%m/%Y")),
-            kv("  Plazo:", "15 días naturales"),
-            fila(""),
-            borde_m,
-            fila(""),
-            fila("  Conserve este comprobante."),
-            fila(""),
-            borde_f,
-        ]) + "\n"
+    ancho = A4[0] - 4*cm
 
-        with open(ruta, "w", encoding="utf-8") as f:
-            f.write(contenido)
-        return ruta
-    except IOError as e:
-        raise IOError(f"Error al crear el recibo: {e}")
+    def hr(color=GOLD, t=1):
+        return HRFlowable(width="100%", thickness=t, color=color,
+                          spaceAfter=4, spaceBefore=2)
+
+    def kv_tabla(filas):
+        data = [[Paragraph(lb, S["lbl"]), Paragraph(vl, S[st])]
+                for lb, vl, st in filas]
+        t = Table(data, colWidths=[4*cm, 11.5*cm])
+        t.setStyle(TableStyle([
+            ("ROWBACKGROUNDS", (0,0), (-1,-1), [CARD, CARD2]),
+            ("LEFTPADDING",  (0,0), (-1,-1), 10),
+            ("RIGHTPADDING", (0,0), (-1,-1), 10),
+            ("TOPPADDING",   (0,0), (-1,-1),  5),
+            ("BOTTOMPADDING",(0,0), (-1,-1),  5),
+            ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+            ("LINEBELOW",    (0,0), (-1,-2), 0.3, LINE),
+        ]))
+        return t
+
+    # ── Contenido ─────────────────────────────────────────────
+    story = []
+
+    story.append(hr(GOLD, 3))
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("✦  EL ARCHIVO DE LOS MUNDOS  ✦", S["titulo"]))
+    story.append(Paragraph(
+        "C O M P R O B A N T E   D E   P R E S T A M O", S["sub"]))
+    story.append(Spacer(1, 6))
+    story.append(hr(GOLD, 1))
+
+    cab = Table([[
+        Paragraph("PRESTAMO",         S["lbl"]),
+        Paragraph("FECHA DE EMISION", S["lbl"]),
+    ],[
+        Paragraph(f"# {id_prestamo:04d}", S["num"]),
+        Paragraph(fecha_emis,             S["fecha"]),
+    ]], colWidths=[ancho*0.44, ancho*0.56])
+    cab.setStyle(TableStyle([
+        ("BACKGROUND",   (0,0), (-1,-1), CARD),
+        ("LEFTPADDING",  (0,0), (-1,-1), 14),
+        ("TOPPADDING",   (0,0), (-1,-1),  6),
+        ("BOTTOMPADDING",(0,0), (-1,-1),  8),
+        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+        ("LINERIGHT",    (0,0), (0,-1), 0.5, LINE),
+    ]))
+    story.append(cab)
+    story.append(hr(GOLD, 1))
+    story.append(Spacer(1, 4))
+
+    story.append(Paragraph("DATOS DEL SOCIO", S["sec"]))
+    story.append(hr(GOLD, 0.4))
+    story.append(kv_tabla([
+        ("ID socio",  str(usuario.id_usuario),              "val_gold"),
+        ("Nombre",    usuario.nombre                or "—", "val"),
+        ("Correo",    getattr(usuario,"correo","")  or "—", "val"),
+        ("Telefono",  getattr(usuario,"telefono","")or "—", "val"),
+    ]))
+
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("LIBRO PRESTADO", S["sec"]))
+    story.append(hr(GOLD, 0.4))
+    story.append(kv_tabla([
+        ("ISBN",   libro.isbn   or "—", "val"),
+        ("Titulo", libro.titulo or "—", "val_gold"),
+        ("Autor",  libro.autor  or "—", "val"),
+    ]))
+
+    story.append(Spacer(1, 8))
+    story.append(Paragraph("DEVOLUCION", S["sec"]))
+    story.append(hr(ERR, 0.4))
+    story.append(kv_tabla([
+        ("Fecha limite", fecha_dev,           "val_err"),
+        ("Plazo",        "15 dias naturales", "val"),
+    ]))
+
+    story.append(Spacer(1, 14))
+    story.append(hr(GOLD, 2))
+    story.append(Paragraph(
+        "Conserve este comprobante como justificante del prestamo.", S["pie"]))
+    story.append(Paragraph("✦", S["pie"]))
+    story.append(hr(GOLD, 2))
+
+    def fondo(c, doc):
+        c.saveState()
+        c.setFillColor(DARK)
+        c.rect(0, 0, A4[0], A4[1], fill=1, stroke=0)
+        c.restoreState()
+
+    doc = SimpleDocTemplate(
+        ruta_pdf, pagesize=A4,
+        leftMargin=2*cm, rightMargin=2*cm,
+        topMargin=2*cm,  bottomMargin=2*cm,
+        title=f"Recibo Prestamo #{id_prestamo:04d}",
+        author="Biblioteca El Archivo de los Mundos",
+    )
+    try:
+        doc.build(story, onFirstPage=fondo, onLaterPages=fondo)
+    except Exception as e:
+        raise IOError(f"Error al crear el PDF: {e}")
+
+    return ruta_pdf
 
 
 # ── Helper: estilo Combobox oscuro ────────────────────────────
@@ -471,8 +570,12 @@ class SeccionPrestamos:
             usuario.libros_prestados.append(libro)
             usuario.devolver(isbn)
 
-            cur.execute("UPDATE prestamos SET devuelto=1 WHERE id_prestamo=?",
-                        (id_prestamo,))
+            fecha_real = datetime.now().strftime("%Y-%m-%d")
+            cur.execute("""
+                UPDATE prestamos
+                SET devuelto = 1, fecha_devolucion_real = ?
+                WHERE id_prestamo = ?
+            """, (fecha_real, id_prestamo))
             cur.execute("UPDATE libros SET estado='Disponible' WHERE isbn=?", (isbn,))
             conn.commit()
             conn.close()
