@@ -460,15 +460,15 @@ class SeccionCalendario:
         tk.Label(cell, text=str(d.day), font=num_font,
                  bg=bg, fg=num_color, anchor="ne").pack(anchor="ne", padx=5, pady=3)
 
-        # Puntos de eventos
+        # Indicadores de eventos
         evs = self._eventos.get(d, [])
         if evs:
             dots_frame = tk.Frame(cell, bg=bg)
-            dots_frame.pack(anchor="w", padx=4)
+            dots_frame.pack(anchor="w", padx=3, pady=(0, 3))
             conteos = {}
             for ev in evs:
                 conteos[ev["tipo"]] = conteos.get(ev["tipo"], 0) + 1
-            orden = ["nuevo", "vence", "vencido", "devuelto"]
+            orden = ["vencido", "vence", "nuevo", "devuelto"]
             color_map = {
                 "nuevo":    COLOR_NUEVO,
                 "vence":    COLOR_VENCE_HOY,
@@ -479,22 +479,31 @@ class SeccionCalendario:
                 if tipo in conteos:
                     color = color_map[tipo]
                     n     = conteos[tipo]
-                    lbl = tk.Label(dots_frame,
-                                   text=f"● {n}" if n > 1 else "●",
-                                   font=("Georgia", 8),
-                                   bg=bg, fg=color)
-                    lbl.pack(side="left", padx=(0, 2))
+                    # Chip de color con número
+                    chip = tk.Frame(dots_frame, bg=color,
+                                    highlightthickness=0, bd=0)
+                    chip.pack(side="left", padx=(0, 2))
+                    txt = str(n) if n > 1 else "·"
+                    lbl = tk.Label(chip,
+                                   text=txt,
+                                   font=("Georgia", 7, "bold"),
+                                   bg=color, fg="#ffffff",
+                                   padx=3, pady=0)
+                    lbl.pack()
 
-        # Bind clic en toda la celda
-        for widget in [cell] + cell.winfo_children():
-            widget.bind("<Button-1>", lambda e, day=d: self._seleccionar_dia(day))
-            widget.bind("<Enter>",    lambda e, c=cell, day=d:
+        # Bind clic en toda la celda (incluyendo chips anidados)
+        def _bind_rec(w):
+            w.bind("<Button-1>", lambda e, day=d: self._seleccionar_dia(day))
+            w.bind("<Enter>",    lambda e, c=cell, day=d:
                         c.config(highlightbackground=self._gold)
                         if day != self._sel else None)
-            widget.bind("<Leave>",    lambda e, c=cell, day=d, hoy=es_hoy:
+            w.bind("<Leave>",    lambda e, c=cell, day=d, hoy=es_hoy:
                         c.config(highlightbackground=self._golddim
                                  if hoy else "#1e1c28")
                         if day != self._sel else None)
+            for child in w.winfo_children():
+                _bind_rec(child)
+        _bind_rec(cell)
 
         self._celdas[d] = cell
 

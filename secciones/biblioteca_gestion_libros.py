@@ -237,6 +237,9 @@ def aplicar_tema():
         "secciones.biblioteca_gestion_usuarios",
         "secciones.biblioteca_gestion_prestamos",
         "secciones.biblioteca_secciones_usuario",
+        "secciones.biblioteca_sanciones",
+        "secciones.biblioteca_facturas",
+        "secciones.biblioteca_calendario",
     ]
     for nombre in modulos:
         mod = sys.modules.get(nombre)

@@ -577,7 +577,7 @@ class App(tk.Tk):
         super().__init__()
 
         # --- Ventana ---
-        self.title("La Granateca")
+        self.title("El Archivo de los Mundos")
         self._aplicar_tema_login()
         self.resizable(False, False)
 
@@ -651,15 +651,16 @@ class App(tk.Tk):
 
         # Frame principal — sin altura fija, se autoajusta al contenido
         self.card = tk.Frame(self, bg=COLOR_CARD, bd=0, highlightthickness=1,
-                             highlightbackground=COLOR_GOLD_DIM, width=card_w)
+                             highlightbackground=COLOR_GOLD_DIM, width=card_w,
+                             padx=0, pady=4)
         self.card.place(relx=0.5, rely=0.5, anchor="center")
         self.card.pack_propagate(True)
 
         # ── Título ──
         tk.Label(self.card, text="El Archivo de los Mundos",
-                 font=FONT_TITLE, bg=COLOR_CARD, fg=COLOR_GOLD).pack(pady=(pad, 2))
+                 font=FONT_TITLE, bg=COLOR_CARD, fg=COLOR_GOLD).pack(pady=(pad, 2), padx=pad)
         tk.Label(self.card, text=_tx("subtitulo"),
-                 font=("Georgia", 9, "italic"), bg=COLOR_CARD, fg=COLOR_DIM).pack()
+                 font=("Georgia", 9, "italic"), bg=COLOR_CARD, fg=COLOR_DIM).pack(padx=pad)
 
         # Separador
         sep = tk.Frame(self.card, height=1, bg=COLOR_GOLD_DIM)
@@ -708,6 +709,8 @@ class App(tk.Tk):
         self.user_entry.bind("<FocusIn>",  lambda _: self._focus_entry(self.user_entry, True))
         self.user_entry.bind("<FocusOut>", lambda _: self._focus_entry(self.user_entry, False))
         self.user_entry.bind("<KeyRelease>", lambda _: self._limpiar_msg())
+        # Espaciador invisible para igualar la anchura con el campo contraseña (que tiene el botón ojo)
+        tk.Frame(user_frame, width=28, bg=COLOR_CARD).pack(side="left")
 
         # ── Campo contraseña ──
         self._campo(self.card, _tx("campo_pass"), pad)
@@ -854,7 +857,7 @@ class App(tk.Tk):
         # ── Footer ──
         self._footer_lbl = tk.Label(self.card, text=_tx("footer"),
                                     font=("Georgia", 8, "italic"), bg=COLOR_CARD, fg=COLOR_DIM)
-        self._footer_lbl.pack(pady=(8, 0))
+        self._footer_lbl.pack(pady=(8, pad // 2))
 
     # ── Helpers de UI ───────────────────────────────────
     def _campo(self, parent, texto, padx):
